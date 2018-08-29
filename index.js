@@ -26,7 +26,7 @@ var StringDecoder = require('string_decoder').StringDecoder;
 
 var config = require('./config')
 
-// here, we instantiate our http server: 
+// here, we instantiate our http server, which will call our unifiedServer, which contains our logic
 
 var httpServer = http.createServer(function(req, res) {
     unifiedServer(req, res);
@@ -45,7 +45,7 @@ var httpsServerOptions = {
     'cert': fs.readFileSync('./https/cert.pem')
 }
 
-// instantiating the https server, passing in our keys/cert object
+// instantiating the https server, passing in our keys/cert object, also calls our unifiedServer
 
 var httpsServer = https.createServer(httpsServerOptions, function(req, res) {
     unifiedServer(req, res);
