@@ -1,52 +1,58 @@
 // primary file for the API
-// to test: node index.js on one console
-// curl localhost:3000/foo on another
 
 // dependencies
 
-/// http server lets you listen on ports and respond
-// use http module to define what server does
+// http module enables requests and responses via a server
 
 const http = require('http');
 
-// which resources peopel are requesting when they send requests 
-// so parse the url they are asking for. 
+// use fs module allows us to read from / write to the file system 
 
 var fs = require('fs')
 
+// the url module splits up a web address into useable parts 
+
 const url = require('url');
+
+// https allows us to create a server that uses TLS / SSL protocol.  
 
 const https = require('https')
 
-//
+// this decoder allows us to decode Buffer objects into strings
 
 var StringDecoder = require('string_decoder').StringDecoder;
 
+// this is our import that contains server configurations:
+
 var config = require('./config')
 
-// instantiating the http server
+// here, we instantiate our http server: 
 
 var httpServer = http.createServer(function(req, res) {
     unifiedServer(req, res);
     })
 
-// start the server, and have it listen to port 3000
+// and start it: 
+
 httpServer.listen(config.httpPort, function() {
     console.log("the server is listening on port " + config.httpPort )
 })
 
-// instantiating the https server
+// this object points to the files with our keys and certificates used in https.createServer
 
 var httpsServerOptions = {
     'key': fs.readFileSync('./https/key.pem'),
     'cert': fs.readFileSync('./https/cert.pem')
 }
 
+// instantiating the https server, passing in our keys/cert object
+
 var httpsServer = https.createServer(httpsServerOptions, function(req, res) {
     unifiedServer(req, res);
-    })
+})
 
-// instantiate https server
+// starting it: 
+
 httpsServer.listen(config.httpsPort, function() {
     console.log("the server is listening on port " + config.httpsPort)
 })
@@ -55,95 +61,111 @@ httpsServer.listen(config.httpsPort, function() {
 // all the server logic for both the http and https server
 
 var unifiedServer = function(req, res) {
-    // get url and parse it 
-    // true means to parse the query streing / to set the parsed url doc query value at the equivalent as if we had sent this datato the query string module.  
-    // so we're using 2 modules: url and the query string > true calls the query string module. 
-    // parsed Url has a bunch of meta data about host
+
+    // get url and parse it to get meta data about host
+    // true activates the  query string module.  
+    
     var parsedUrl = url.parse(req.url, true)
-    // get path from url - the untrimmed path
+    
+    // a url method that gets untrimmed path from url: 
+
     var path = parsedUrl.pathname;
-    // trimmed  path
-    // \/+ - matches many slashes | or same on end -
-    // /g - this modifier is used to perform a global match (find all matches rathter than stoping after the first match.  to perform a global, case-insensitive serach, use g with i)  
-    // var p="x"; p.replace(/x/, "y")  - now p is y
+    
+    // here, we trim the path using regex, which means: 
+    // \/+ - matches any slashes that occur at start OR  (|) end 
+    // /g - global match rather than stopping at the first - to perform a global, case-insensitive serach, use g with i)  
+    // use the .replace method: slashes with blank space ''  
+    
     var trimmedPath = path.replace(/^\/+|\/+$/g,'');
 
-    // get the query string as an object
-    // true tells url.parse to go ahead an throw its queryString operations to the queryStrings library built into node so that this object that comes back parseduld.query object is the same as if we had used that queryString object ourselves. namely, when someone sends a url with many query parameters on the end, those are all parsed and put nicely into this object with keys and values
+    // get the query parameters and translates into an object with keys and values.
+    // we can do this because we marked 'true' on url.parse
     
     var queryStringObject = parsedUrl.query;
 
-    // get HTTP method - method is an object availabe on req
-    // make sure its all placed in lower case - 
+    // get HTTP method and place in lowercase:
 
     var method = req.method.toLowerCase()
 
-    // get teh headers as an Object - this can't be used with curl - so use postman. 
+    // get the headers as an Object: 
 
     var headers = req.headers;
 
-    // get the payload if there is anything
+    // get the StringDecoder module to decode our buffer
 
     var decoder = new StringDecoder('utf-8');
 
     var buffer = '';
 
-    // each time data streams in a piece, request object emits data event we are binding to and sends us undecoded data, we decode it to utf8 using the decoder. and add the result to the buffer.  a large stream recieved bits at a time.  
+    // .on binds an event (arbitrarily called 'data') to the 'req' object. 
+    // So, each time the req object recieves data, we run this function
+    // this function decodes the data and appends it to our buffer until there's no more data?:  
 
     req.on('data', function(data) {
         buffer += decoder.write(data);
     })
 
-    // when is it all done? 
+    // By this time, the buffering is over, so: 
 
     req.on('end', function() {
+
+        // we end the decoding: 
+
         buffer += decoder.end()
-            // choose handler this request should go to.  if one not found, use not found handler - essentially: if 'foo' is path, and router.foo exists, then it becomes the chosenHandler
 
-            // var chosenHandler = typeof(router[trimmedPath]) !== 'undefined' ? router[trimmedPath] : handlers.notFound;
+        // check if the trimmed path matches any of the keys in our router object.  If not, the chosenHandler is handlers.notFound. 
 
-            var chosenHandler = typeof(router[trimmedPath]) !== 'undefined' ? router[trimmedPath] : handlers.notFound;
+        var chosenHandler = typeof(router[trimmedPath]) !== 'undefined' ? router[trimmedPath] : handlers.notFound;
 
-            // Construct data object to send to the handler
+        // Construct data object to send to the handler
 
-            var data = {
-                'trimmedPath': trimmedPath,
-                'queryStringObject': queryStringObject,
-                'method': method,
-                'headers': headers,
-                'payload': buffer
-            }
+        var data = {
+            'trimmedPath': trimmedPath,
+            'queryStringObject': queryStringObject,
+            'method': method,
+            'headers': headers,
+            'payload': buffer
+        }
+        
+        // call the handler function (whether it is handler.notFound or one in the router object)
+        // pass in data object (above) and function noted in 2nd parameter.
+        // the handler function will take the data as well as the noted function as a callback  
 
-            // route the request to the handler specified in handler -- we expect back statusCode and payload
+        chosenHandler(data, function(statusCode, payload) {
 
-            chosenHandler(data, function(statusCode, payload) {
-                // use the status code callback or default to 200
+            // set the statusCode: 
+            
+            statusCode = typeof(statusCode)  == 'number' ? statusCode : 200;
 
-                statusCode = typeof(statusCode)  == 'number' ? statusCode : 200;
+            // if theres no payload object, default to empty object
+            
+            payload = typeof(payload) == 'object' ? payload : {};
 
-                // use payload callback or default to empty object
-                
-                payload = typeof(payload) == 'object' ? payload : {};
+            // to pass a payload via HTTP, we need to stringify it:  
 
-                // we can't send an object back to user who wsent this - we need to send a string - why????
+            var payloadString = JSON.stringify(payload);
 
-                var payloadString = JSON.stringify(payload);
-
-                // return the response 
-                // res.setHeader('Content-Type', 'application/json');
-
-                res.writeHead(statusCode, {
-                    "Content-Type": "application/json"
-                })
-                res.end(payloadString);
-                     // this was originally outside this req.on
-            // log what path the person was asking for // log the request path
-            // console.log("Request recieved on path " + trimmedPath + " with this method " + method + " with these query strings parameters " , queryStringObject , " headers are " , headers, " payload ", buffer);
-
-            console.log("returning ", statusCode, payloadString);
-
+            // create the head for our response:  
+            
+            res.writeHead(statusCode, {
+                "Content-Type": "application/json"
             })
+
+            // send our payload: 
+
+            res.end(payloadString);
+                
+            // for kicks, I'm parsing logging the payload.payload, 
+            // which I had set as {"abc":"123"}
+
+            var obj = JSON.parse(payload.payload)
+            
+
+            console.log("returning ", statusCode, obj.abc);
+        
+
         })
+    })
 }
 
 
@@ -153,15 +175,14 @@ var  handlers = {};
 
 // ping handler
 
-handlers.ping = function(data, callback) {
-    callback(200)
+handlers.ping = function(data, callback) {    
+    callback(200, data)// this is the function passed in as the chosenHandler argumnet
 }
  
-
 // not found handler 
 
 handlers.notFound = function(data, callback) {
-    callback(404);
+    callback(404 ) // this is the function passed in as the chosenHandler argumnet
 }
 
 // define a request router 
