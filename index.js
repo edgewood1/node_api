@@ -12,19 +12,49 @@ const http = require('http');
 // which resources peopel are requesting when they send requests 
 // so parse the url they are asking for. 
 
+var fs = require('fs')
+
 const url = require('url');
+
+const https = require('https')
 
 //
 
 var StringDecoder = require('string_decoder').StringDecoder;
 
+var config = require('./config')
+
+// instantiating the http server
+
+var httpServer = http.createServer(function(req, res) {
+    unifiedServer(req, res);
+    })
+
+// start the server, and have it listen to port 3000
+httpServer.listen(config.httpPort, function() {
+    console.log("the server is listening on port " + config.httpPort )
+})
+
+// instantiating the https server
+
+var httpsServerOptions = {
+    'key': fs.readFileSync('./https/key.pem'),
+    'cert': fs.readFileSync('./https/cert.pem')
+}
+
+var httpsServer = https.createServer(httpsServerOptions, function(req, res) {
+    unifiedServer(req, res);
+    })
+
+// instantiate https server
+httpsServer.listen(config.httpsPort, function() {
+    console.log("the server is listening on port " + config.httpsPort)
+})
 
 
-// the server s hould respond to all requests with a string
-// configure server
+// all the server logic for both the http and https server
 
-
-var server = http.createServer(function(req, res) {
+var unifiedServer = function(req, res) {
     // get url and parse it 
     // true means to parse the query streing / to set the parsed url doc query value at the equivalent as if we had sent this datato the query string module.  
     // so we're using 2 modules: url and the query string > true calls the query string module. 
@@ -114,22 +144,19 @@ var server = http.createServer(function(req, res) {
 
             })
         })
-    })
+}
 
-// start the server, and have it listen to port 3000
-server.listen(3000, function() {
-    console.log("the server is listening on port 3000")
-})
 
 // define handlers 
 
 var  handlers = {};
 
-// sample handler
-// inside, callback an http status code and a payload object
-handlers.sample = function(data,callback){
-    callback(406,{'name':'sample handler'});
-};
+// ping handler
+
+handlers.ping = function(data, callback) {
+    callback(200)
+}
+ 
 
 // not found handler 
 
@@ -140,5 +167,5 @@ handlers.notFound = function(data, callback) {
 // define a request router 
 
 var router = {
-    'sample': handlers.sample
+    'ping': handlers.ping,
 }
